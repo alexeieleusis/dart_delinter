@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:analyzer/src/lint/config.dart';
-import 'package:analyzer/src/lint/io.dart';
 import 'package:analyzer/src/lint/linter.dart';
 import 'package:analyzer/src/lint/registry.dart';
+import 'package:analyzer/src/lint/io.dart' as analyzer_io;
 import 'package:args/args.dart';
 import 'package:analysis_client/analysis_client.dart';
 import 'package:dart_delinter/src/delinters/annotate_overrides_delinter.dart';
@@ -13,12 +13,13 @@ import 'package:dart_delinter/src/delinters/await_only_futures_delinter.dart';
 import 'package:dart_delinter/src/delinters/delint_rule.dart';
 import 'package:dart_delinter/src/delinters/type_init_formals_delinter.dart';
 import 'package:dart_delinter/src/delinters/unnecessary_brace_in_string_interp_delinter.dart';
+import 'package:dart_delinter/src/logging.dart';
 
 AnalysisServer analysisServer;
 
 void main(List<String> args) {
   print(args);
-  _runDelinter(args, new LinterOptions());
+  _runDelinter(args, new LinterOptions(), new Logger());
 }
 
 const _processFileFailedExitCode = 65;
@@ -104,21 +105,22 @@ bool _isLinterError(Map result) =>
     result['id'] != 'start' &&
     result.containsKey('result');
 
-void _printUsage(ArgParser parser, IOSink out, [String error]) {
+void _printUsage(ArgParser parser, Logger logger, [String error]) {
   var message = "Lints Dart source files and pubspecs.";
   if (error != null) {
     message = error;
   }
 
-  out.writeln('''$message
-Usage: linter <file>
-${parser.usage}
-
-For more information, see https://github.com/dart-lang/linter
-''');
+  logger
+    ..writeln(message)
+    ..writeln('Usage: linter <file>')
+    ..writeln(parser.usage)
+    ..writeln('For more information, see https://github.com/dart-lang/linter');
 }
 
-Future _runDelinter(List<String> args, LinterOptions initialLintOptions) async {
+Future  _runDelinter(
+    List<String> args, LinterOptions initialLintOptions, Logger logger) async {
+
   // Force the rule registry to be populated.
   final parser = new ArgParser(allowTrailingOptions: true);
 
@@ -144,18 +146,18 @@ Future _runDelinter(List<String> args, LinterOptions initialLintOptions) async {
   try {
     options = parser.parse(args);
   } on FormatException catch (err) {
-    _printUsage(parser, errorSink, err.message);
+    _printUsage(parser, logger, err.message);
     exitCode = _unableToProcessExitCode;
     return;
   }
 
   if (options["help"]) {
-    _printUsage(parser, outSink);
+    _printUsage(parser, logger);
     return;
   }
 
   if (options.rest.isEmpty) {
-    _printUsage(parser, errorSink,
+    _printUsage(parser, logger,
         "Please provide at least one file or directory to lint.");
     exitCode = _unableToProcessExitCode;
     return;
@@ -165,7 +167,7 @@ Future _runDelinter(List<String> args, LinterOptions initialLintOptions) async {
 
   final configFile = options["config"];
   if (configFile != null) {
-    final config = new LintConfig.parse(readFile(configFile));
+    final config = new LintConfig.parse(analyzer_io.readFile(configFile));
     lintOptions.configure(config);
   }
 
@@ -175,7 +177,7 @@ Future _runDelinter(List<String> args, LinterOptions initialLintOptions) async {
     for (final lint in lints) {
       final rule = Registry.ruleRegistry[lint];
       if (rule == null) {
-        errorSink.write('Unrecognized lint rule: $lint');
+        logger.write('Unrecognized lint rule: $lint');
         exit(_unableToProcessExitCode);
       }
       rules.add(rule);
@@ -189,9 +191,10 @@ Future _runDelinter(List<String> args, LinterOptions initialLintOptions) async {
     lintOptions.dartSdkPath = customSdk;
   }
 
+
   final String analysisServerCmd = options['analysis-server'];
   if (analysisServerCmd == null) {
-    errorSink.write('Path to the analysis server script must be provided.');
+    logger.write('Path to the analysis server script must be provided.');
     exit(_unableToProcessExitCode);
   }
 
@@ -203,7 +206,7 @@ Future _runDelinter(List<String> args, LinterOptions initialLintOptions) async {
   final packageConfigFile = options['packages'];
 
   if (customPackageRoot != null && packageConfigFile != null) {
-    errorSink.write("Cannot specify both '--package-root' and '--packages.");
+    logger.write("Cannot specify both '--package-root' and '--packages.");
     exitCode = _unableToProcessExitCode;
     return;
   }
@@ -212,8 +215,8 @@ Future _runDelinter(List<String> args, LinterOptions initialLintOptions) async {
 
   final List<File> filesToLint = [];
   for (final path in options.rest) {
-    filesToLint
-        .addAll(collectFiles(path).where((f) => f.path.endsWith('.dart')));
+    filesToLint.addAll(
+        analyzer_io.collectFiles(path).where((f) => f.path.endsWith('.dart')));
   }
 
   try {
@@ -239,7 +242,7 @@ Future _runDelinter(List<String> args, LinterOptions initialLintOptions) async {
       errorSink.writeln("Requsting errors for ${file.path}");
     }
   } catch (err, stack) {
-    errorSink.writeln('''An error occurred while linting
+    logger.writeln('''An error occurred while linting
 $err
 $stack''');
   }
