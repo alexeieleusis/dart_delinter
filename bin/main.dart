@@ -218,8 +218,10 @@ Future _runDelinter(List<String> args, LinterOptions initialLintOptions) async {
 
   try {
     final List<String> responses = [];
-    var process = await Process.start('/usr/lib/google-dartlang/bin/dart',
-        [analysisServerCmd, '--no-error-notification']);
+    var process = await Process.start('/usr/lib/google-dartlang/bin/dart', [
+      analysisServerCmd,
+      '--no-error-notification',
+    ]);
     process.stdout
         .transform(UTF8.decoder)
         .listen(_buildOnData(process, responses, filesToLint, []));
@@ -234,7 +236,7 @@ Future _runDelinter(List<String> args, LinterOptions initialLintOptions) async {
     for (var file in filesToLint) {
       await analysisServer.analysis
           .getErrors('${filesToLint.indexOf(file)}', file.path);
-      stderr.writeln("Requsting errors for ${file.path}");
+      errorSink.writeln("Requsting errors for ${file.path}");
     }
   } catch (err, stack) {
     errorSink.writeln('''An error occurred while linting
