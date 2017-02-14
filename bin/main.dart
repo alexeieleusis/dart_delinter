@@ -7,12 +7,15 @@ import 'package:analyzer/src/lint/linter.dart';
 import 'package:analyzer/src/lint/registry.dart';
 import 'package:analyzer/src/lint/io.dart' as analyzer_io;
 import 'package:args/args.dart';
+import 'package:analysis_client/analysis_client.dart';
 import 'package:dart_delinter/src/delinters/annotate_overrides_delinter.dart';
 import 'package:dart_delinter/src/delinters/await_only_futures_delinter.dart';
 import 'package:dart_delinter/src/delinters/delint_rule.dart';
 import 'package:dart_delinter/src/delinters/type_init_formals_delinter.dart';
 import 'package:dart_delinter/src/delinters/unnecessary_brace_in_string_interp_delinter.dart';
 import 'package:dart_delinter/src/logging.dart';
+
+AnalysisServer analysisServer;
 
 void main(List<String> args) {
   print(args);
@@ -115,8 +118,9 @@ void _printUsage(ArgParser parser, Logger logger, [String error]) {
     ..writeln('For more information, see https://github.com/dart-lang/linter');
 }
 
-void _runDelinter(
-    List<String> args, LinterOptions initialLintOptions, Logger logger) {
+Future  _runDelinter(
+    List<String> args, LinterOptions initialLintOptions, Logger logger) async {
+
   // Force the rule registry to be populated.
   final parser = new ArgParser(allowTrailingOptions: true);
 
@@ -187,8 +191,9 @@ void _runDelinter(
     lintOptions.dartSdkPath = customSdk;
   }
 
-  final String analysisServer = options['analysis-server'];
-  if (analysisServer == null) {
+
+  final String analysisServerCmd = options['analysis-server'];
+  if (analysisServerCmd == null) {
     logger.write('Path to the analysis server script must be provided.');
     exit(_unableToProcessExitCode);
   }
@@ -216,32 +221,30 @@ void _runDelinter(
 
   try {
     final List<String> responses = [];
-    Process.start('/usr/lib/google-dartlang/bin/dart',
-        [analysisServer, '--no-error-notification']).then((process) {
-      process.stdout
-          .transform(UTF8.decoder)
-          .listen(_buildOnData(process, responses, filesToLint, []));
-      _setAnalysisRootsAndRequestAnalysis(process, filesToLint, options.rest);
-    });
+    var process = await Process.start('/usr/lib/google-dartlang/bin/dart', [
+      analysisServerCmd,
+      '--no-error-notification',
+    ]);
+    process.stdout
+        .transform(UTF8.decoder)
+        .listen(_buildOnData(process, responses, filesToLint, []));
+    final analysisRoots = options.rest;
+
+    analysisServer = new AnalysisServer(process.stdin);
+
+    await analysisServer.analysis.setAnalysisRoots(
+      'start',
+      included: analysisRoots,
+    );
+    for (var file in filesToLint) {
+      await analysisServer.analysis
+          .getErrors('${filesToLint.indexOf(file)}', file.path);
+      errorSink.writeln("Requsting errors for ${file.path}");
+    }
   } catch (err, stack) {
     logger.writeln('''An error occurred while linting
 $err
 $stack''');
-  }
-}
-
-void _setAnalysisRootsAndRequestAnalysis(
-    Process process, List<File> filesToLint, Iterable<String> analysisRoots) {
-  print('analyzing ${filesToLint.length} sources...');
-  process.stdin.writeln('{"id":"start",'
-      '"method":"analysis.setAnalysisRoots",'
-      '"params":{"included":["${analysisRoots.join('","')}"],'
-      '"excluded":[]}}');
-  for (final file in filesToLint) {
-    final request = '{"id":"${filesToLint.indexOf(file)}",'
-        '"method":"analysis.getErrors",'
-        '"params":{"file":"${file.path}"}}';
-    process.stdin.writeln(request);
   }
 }
 
