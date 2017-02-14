@@ -108,12 +108,11 @@ void _printUsage(ArgParser parser, Logger logger, [String error]) {
     message = error;
   }
 
-  logger.writeln('''$message
-Usage: linter <file>
-${parser.usage}
-
-For more information, see https://github.com/dart-lang/linter
-''');
+  logger
+    ..writeln(message)
+    ..writeln('Usage: linter <file>')
+    ..writeln(parser.usage)
+    ..writeln('For more information, see https://github.com/dart-lang/linter');
 }
 
 void _runDelinter(
