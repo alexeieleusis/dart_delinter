@@ -1,5 +1,16 @@
 name: dart_delinter
 version: 0.0.1
-description: A simple console application.
-#dependencies:
-#  foo_bar: '>=1.0.0 <2.0.0'
+description: A delinter for dart
+homepage: https://github.com/alexeieleusis/dart_delinter
+environment:
+  sdk: '>=1.12.0 <2.0.0'
+dependencies:
+  analysis_server:
+  analyzer: ^0.29.6
+  args: '>=0.12.1 <0.14.0'
+  cli_util: ^0.0.1
+  glob: ^1.0.3
+  plugin: ^0.2.0
+  source_span: ^1.0.2
+  yaml: ^2.1.2
+dev_dependencies:
