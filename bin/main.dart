@@ -10,6 +10,8 @@ import 'package:args/args.dart';
 import 'package:dart_delinter/src/delinters/annotate_overrides_delinter.dart';
 import 'package:dart_delinter/src/delinters/await_only_futures_delinter.dart';
 import 'package:dart_delinter/src/delinters/delint_rule.dart';
+import 'package:dart_delinter/src/delinters/type_init_formals_delinter.dart';
+import 'package:dart_delinter/src/delinters/unnecessary_brace_in_string_interp_delinter.dart';
 
 void main(List<String> args) {
   print(args);
@@ -24,7 +26,9 @@ JsonDecoder _decoder = new JsonDecoder();
 
 List<DelintRule> _rules = [
   new AnnotateOverridesDelinter(),
-  new AwaitOnlyFuturesDelinter()
+  new AwaitOnlyFuturesDelinter(),
+  new UnnecessaryBraceInStringInterp(),
+  new TypeInitFormals(),
 ];
 
 Map<String, File> _buildFiles(List<String> paths) {
