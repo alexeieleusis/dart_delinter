@@ -1,3 +1,4 @@
+// ignore: implementation_imports
 import 'package:analyzer/src/lint/io.dart';
 
 /// A simple logging interface.

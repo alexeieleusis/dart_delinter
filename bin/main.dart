@@ -2,20 +2,18 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:analysis_client/analysis_client.dart';
 import 'package:analyzer/src/lint/config.dart';
+import 'package:analyzer/src/lint/io.dart' as analyzer_io;
 import 'package:analyzer/src/lint/linter.dart';
 import 'package:analyzer/src/lint/registry.dart';
-import 'package:analyzer/src/lint/io.dart' as analyzer_io;
 import 'package:args/args.dart';
-import 'package:analysis_client/analysis_client.dart';
 import 'package:dart_delinter/src/delinters/annotate_overrides_delinter.dart';
 import 'package:dart_delinter/src/delinters/await_only_futures_delinter.dart';
 import 'package:dart_delinter/src/delinters/delint_rule.dart';
 import 'package:dart_delinter/src/delinters/type_init_formals_delinter.dart';
 import 'package:dart_delinter/src/delinters/unnecessary_brace_in_string_interp_delinter.dart';
 import 'package:dart_delinter/src/logging.dart';
-
-AnalysisServer analysisServer;
 
 void main(List<String> args) {
   print(args);
@@ -25,6 +23,8 @@ void main(List<String> args) {
 const _processFileFailedExitCode = 65;
 
 const _unableToProcessExitCode = 64;
+
+AnalysisServer _analysisServer;
 
 JsonDecoder _decoder = new JsonDecoder();
 
@@ -95,7 +95,7 @@ void _fixErrors(List<Map> errors, Process process) {
     final writesFuture =
         files.keys.map((path) => files[path].writeAsString(sources[path]));
     Future.wait(writesFuture).then((_) {
-      process.stdin.writeln('{"id":"stop","method":"server.shutdown"}');
+      return _analysisServer.server.shutdown('stop');
     });
   });
 }
@@ -221,7 +221,7 @@ Future  _runDelinter(
 
   try {
     final List<String> responses = [];
-    var process = await Process.start('/usr/lib/google-dartlang/bin/dart', [
+    final process = await Process.start('/usr/lib/google-dartlang/bin/dart', [
       analysisServerCmd,
       '--no-error-notification',
     ]);
@@ -230,16 +230,16 @@ Future  _runDelinter(
         .listen(_buildOnData(process, responses, filesToLint, []));
     final analysisRoots = options.rest;
 
-    analysisServer = new AnalysisServer(process.stdin);
+    _analysisServer = new AnalysisServer(process.stdin);
 
-    await analysisServer.analysis.setAnalysisRoots(
+    await _analysisServer.analysis.setAnalysisRoots(
       'start',
       included: analysisRoots,
     );
     for (var file in filesToLint) {
-      await analysisServer.analysis
+      _analysisServer.analysis
           .getErrors('${filesToLint.indexOf(file)}', file.path);
-      errorSink.writeln("Requsting errors for ${file.path}");
+      logger.writeln("Requesting errors for ${file.path}");
     }
   } catch (err, stack) {
     logger.writeln('''An error occurred while linting
