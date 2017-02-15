@@ -44,12 +44,19 @@ Map<String, File> _buildFiles(List<String> paths) {
 }
 
 _OnData<String> _buildOnData(Process process, List<String> responses,
-        List<File> filesToLint, List<Map> errors) =>
-    (String line) {
-      if (line == null || line.trim() == '') {
+        List<File> filesToLint, List<Map> errors, StringBuffer errorsBuffer) =>
+    (String chunk) {
+      if (chunk == null || chunk.trim() == '') {
         return;
       }
-      final resultMaps = line
+      errorsBuffer.write(chunk);
+      final jsons = errorsBuffer.toString();
+      if (!_isBalanced(jsons)) {
+        return;
+      }
+
+      errorsBuffer.clear();
+      final resultMaps = jsons
           .split('\n')
           .map((m) => m.trim())
           .where((s) => s != null && s != '');
@@ -67,6 +74,9 @@ _OnData<String> _buildOnData(Process process, List<String> responses,
         }
       }
     };
+
+bool _isBalanced(String jsons) =>
+    jsons.split('{').length == jsons.split('}').length;
 
 void _fixErrors(List<Map> errors, Process process) {
   print('fixing ${errors.length} errors...');
@@ -226,9 +236,9 @@ Future _runDelinter(
           analysisServerCmd,
           '--no-error-notification',
         ]);
-    process.stdout
-        .transform(UTF8.decoder)
-        .listen(_buildOnData(process, responses, filesToLint, []));
+    final onData =
+        _buildOnData(process, responses, filesToLint, [], new StringBuffer());
+    process.stdout.transform(UTF8.decoder).listen(onData);
     final analysisRoots = options.rest;
 
     _analysisServer = new AnalysisServer(process.stdin);
