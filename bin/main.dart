@@ -16,7 +16,6 @@ import 'package:dart_delinter/src/delinters/unnecessary_brace_in_string_interp_d
 import 'package:dart_delinter/src/logging.dart';
 
 void main(List<String> args) {
-  print(args);
   _runDelinter(args, new LinterOptions(), new Logger());
 }
 
@@ -118,9 +117,8 @@ void _printUsage(ArgParser parser, Logger logger, [String error]) {
     ..writeln('For more information, see https://github.com/dart-lang/linter');
 }
 
-Future  _runDelinter(
+Future _runDelinter(
     List<String> args, LinterOptions initialLintOptions, Logger logger) async {
-
   // Force the rule registry to be populated.
   final parser = new ArgParser(allowTrailingOptions: true);
 
@@ -191,7 +189,6 @@ Future  _runDelinter(
     lintOptions.dartSdkPath = customSdk;
   }
 
-
   final String analysisServerCmd = options['analysis-server'];
   if (analysisServerCmd == null) {
     logger.write('Path to the analysis server script must be provided.');
@@ -221,10 +218,14 @@ Future  _runDelinter(
 
   try {
     final List<String> responses = [];
-    final process = await Process.start('/usr/lib/google-dartlang/bin/dart', [
-      analysisServerCmd,
-      '--no-error-notification',
-    ]);
+    final process = await Process.start(
+        '${lintOptions.dartSdkPath}'
+        '${lintOptions.dartSdkPath.endsWith('/') ? '' : '/'}bin/'
+        'dart',
+        [
+          analysisServerCmd,
+          '--no-error-notification',
+        ]);
     process.stdout
         .transform(UTF8.decoder)
         .listen(_buildOnData(process, responses, filesToLint, []));
@@ -232,17 +233,18 @@ Future  _runDelinter(
 
     _analysisServer = new AnalysisServer(process.stdin);
 
-    await _analysisServer.analysis.setAnalysisRoots(
+    _analysisServer.analysis.setAnalysisRoots(
       'start',
       included: analysisRoots,
     );
+
+    logger.writeln("Analyzing ${filesToLint.length} sources...");
     for (var file in filesToLint) {
       _analysisServer.analysis
           .getErrors('${filesToLint.indexOf(file)}', file.path);
-      logger.writeln("Requesting errors for ${file.path}");
     }
   } catch (err, stack) {
-    logger.writeln('''An error occurred while linting
+    logger.writeln('''An error occurred while delinting
 $err
 $stack''');
   }
