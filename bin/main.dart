@@ -1,18 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:analysis_client/analysis_client.dart';
 import 'package:analyzer/src/lint/config.dart';
 import 'package:analyzer/src/lint/io.dart' as analyzer_io;
 import 'package:analyzer/src/lint/linter.dart';
 import 'package:analyzer/src/lint/registry.dart';
 import 'package:args/args.dart';
-import 'package:dart_delinter/src/delinters/annotate_overrides_delinter.dart';
-import 'package:dart_delinter/src/delinters/await_only_futures_delinter.dart';
-import 'package:dart_delinter/src/delinters/delint_rule.dart';
-import 'package:dart_delinter/src/delinters/type_init_formals_delinter.dart';
-import 'package:dart_delinter/src/delinters/unnecessary_brace_in_string_interp_delinter.dart';
+import 'package:dart_delinter/src/delinter.dart';
 import 'package:dart_delinter/src/logging.dart';
 
 void main(List<String> args) {
@@ -23,96 +17,16 @@ const _processFileFailedExitCode = 65;
 
 const _unableToProcessExitCode = 64;
 
-AnalysisServer _analysisServer;
-
-JsonDecoder _decoder = new JsonDecoder();
-
-List<DelintRule> _rules = [
-  new AnnotateOverridesDelinter(),
-  new AwaitOnlyFuturesDelinter(),
-  new UnnecessaryBraceInStringInterp(),
-  new TypeInitFormals(),
-];
-
-Map<String, File> _buildFiles(List<String> paths) {
-  final files = <String, File>{};
-  for (final path in paths) {
-    files[path] = new File(path);
-  }
-
-  return files;
+Future _delintSourceCode(
+    String dartSdkPath,
+    String analysisServerCmd,
+    Iterable<String> analysisRoots,
+    Logger logger,
+    Iterable<File> filesToLint) async {
+  final delinter =
+      new Delinter(dartSdkPath, analysisServerCmd, analysisRoots, filesToLint);
+  await delinter.delint();
 }
-
-_OnData<String> _buildOnData(Process process, List<String> responses,
-        List<File> filesToLint, List<Map> errors, StringBuffer errorsBuffer) =>
-    (String chunk) {
-      if (chunk == null || chunk.trim() == '') {
-        return;
-      }
-      errorsBuffer.write(chunk);
-      final jsons = errorsBuffer.toString();
-      if (!_isBalanced(jsons)) {
-        return;
-      }
-
-      errorsBuffer.clear();
-      final resultMaps = jsons
-          .split('\n')
-          .map((m) => m.trim())
-          .where((s) => s != null && s != '');
-      for (final map in resultMaps) {
-        final Map result = _decoder.convert(map);
-        if (!_isLinterError(result)) {
-          continue;
-        }
-
-        responses.add(map);
-        errors.addAll(result['result']['errors']);
-
-        if (responses.length == filesToLint.length) {
-          _fixErrors(errors, process);
-        }
-      }
-    };
-
-bool _isBalanced(String jsons) =>
-    jsons.split('{').length == jsons.split('}').length;
-
-void _fixErrors(List<Map> errors, Process process) {
-  print('fixing ${errors.length} errors...');
-
-  _sortErrors(errors);
-
-  final List<String> paths =
-      errors.map((e) => e['location']['file'].toString()).toList();
-
-  final Map<String, File> files = _buildFiles(paths);
-  final Map<String, String> sources = {};
-
-  Future
-      .wait(files.keys.map((f) => files[f].readAsString().then((code) {
-            sources[f] = code;
-            return code;
-          })))
-      .then((_) {
-    for (final error in errors) {
-      final path = error['location']['file'];
-      final code = sources[path];
-      sources[path] = _rules.fold(code, (c, r) => r.fix(error, c));
-    }
-
-    final writesFuture =
-        files.keys.map((path) => files[path].writeAsString(sources[path]));
-    Future.wait(writesFuture).then((_) {
-      return _analysisServer.server.shutdown('stop');
-    });
-  });
-}
-
-bool _isLinterError(Map result) =>
-    result['id'] != null &&
-    result['id'] != 'start' &&
-    result.containsKey('result');
 
 void _printUsage(ArgParser parser, Logger logger, [String error]) {
   var message = "Lints Dart source files and pubspecs.";
@@ -227,51 +141,13 @@ Future _runDelinter(
   }
 
   try {
-    final List<String> responses = [];
-    final process = await Process.start(
-        '${lintOptions.dartSdkPath}'
-        '${lintOptions.dartSdkPath.endsWith('/') ? '' : '/'}bin/'
-        'dart',
-        [
-          analysisServerCmd,
-          '--no-error-notification',
-        ]);
-    final onData =
-        _buildOnData(process, responses, filesToLint, [], new StringBuffer());
-    process.stdout.transform(UTF8.decoder).listen(onData);
     final analysisRoots = options.rest;
-
-    _analysisServer = new AnalysisServer(process.stdin);
-
-    _analysisServer.analysis.setAnalysisRoots(
-      'start',
-      included: analysisRoots,
-    );
-
     logger.writeln("Analyzing ${filesToLint.length} sources...");
-    for (var file in filesToLint) {
-      _analysisServer.analysis
-          .getErrors('${filesToLint.indexOf(file)}', file.path);
-    }
-  } catch (err, stack) {
+    await _delintSourceCode(lintOptions.dartSdkPath, analysisServerCmd,
+        analysisRoots, logger, filesToLint);
+  } on Exception catch (err, stack) {
     logger.writeln('''An error occurred while delinting
 $err
 $stack''');
   }
 }
-
-void _sortErrors(List<Map> errors) {
-  errors.sort((e1, e2) {
-    final Map e1Location = e1['location'];
-    final Map e2Location = e2['location'];
-    if (e1Location['file'] == e2Location['file']) {
-      return e2Location['offset'] - e1Location['offset'];
-    }
-
-    return e1Location['file']
-        .toString()
-        .compareTo(e2Location['file'].toString());
-  });
-}
-
-typedef void _OnData<T>(T data);
