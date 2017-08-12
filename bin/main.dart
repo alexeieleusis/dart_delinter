@@ -6,6 +6,7 @@ import 'package:analyzer/src/lint/io.dart' as analyzer_io;
 import 'package:analyzer/src/lint/linter.dart';
 import 'package:analyzer/src/lint/registry.dart';
 import 'package:args/args.dart';
+import 'package:cli_util/cli_util.dart';
 import 'package:dart_delinter/src/delinter.dart';
 import 'package:dart_delinter/src/logging.dart';
 
@@ -76,13 +77,6 @@ Future _runDelinter(
     return;
   }
 
-  if (options.rest.isEmpty) {
-    _printUsage(parser, logger,
-        "Please provide at least one file or directory to lint.");
-    exitCode = _unableToProcessExitCode;
-    return;
-  }
-
   final lintOptions = initialLintOptions;
 
   final configFile = options["config"];
@@ -106,16 +100,11 @@ Future _runDelinter(
     lintOptions.enabledLints = rules;
   }
 
-  final customSdk = options['dart-sdk'];
-  if (customSdk != null) {
-    lintOptions.dartSdkPath = customSdk;
-  }
+  final customSdk = options['dart-sdk'] ?? getSdkDir().path;
+  lintOptions.dartSdkPath = customSdk;
 
-  final String analysisServerCmd = options['analysis-server'];
-  if (analysisServerCmd == null) {
-    logger.write('Path to the analysis server script must be provided.');
-    exit(_unableToProcessExitCode);
-  }
+  final String analysisServerCmd = options['analysis-server'] ??
+      '$customSdk/bin/snapshots/analysis_server.dart.snapshot';
 
   final customPackageRoot = options['package-root'];
   if (customPackageRoot != null) {
@@ -133,16 +122,21 @@ Future _runDelinter(
   lintOptions.packageConfigPath = packageConfigFile;
 
   final filesToLint = <File>[];
-  for (final path in options.rest) {
-    filesToLint.addAll(
-        analyzer_io.collectFiles(path).where((f) => f.path.endsWith('.dart')));
+  final foldersToScan =
+      options.rest.isEmpty ? [Directory.current.path] : options.rest;
+  for (final path in foldersToScan) {
+    final uri = new Uri.directory(path);
+    final absolutePath =
+        uri.isAbsolute ? uri.path : '${Directory.current.path}/${uri.path}';
+    filesToLint.addAll(analyzer_io
+        .collectFiles(absolutePath.replaceAll('/.', ''))
+        .where((f) => f.path.endsWith('.dart')));
   }
 
   try {
-    final analysisRoots = options.rest;
     logger.writeln("Analyzing ${filesToLint.length} sources...");
     await _delintSourceCode(lintOptions.dartSdkPath, analysisServerCmd,
-        analysisRoots, logger, filesToLint);
+        foldersToScan, logger, filesToLint);
   } on Exception catch (err, stack) {
     logger.writeln('''An error occurred while delinting
 $err
