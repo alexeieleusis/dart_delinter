@@ -3,6 +3,20 @@
 
 // TODO: Put public facing types in this file.
 
+void substituteRecursive() {
+  var n = 0;
+
+  while (n > 0) {
+    do {
+      if (1 > 0) {
+        n--;
+      } else {
+        break;
+      }
+    } while (n > 0);
+  }
+}
+
 /// Checks if you are awesome. Spoiler: you are.
 class Awesome {
   /// Flag indicating if you are awesome!

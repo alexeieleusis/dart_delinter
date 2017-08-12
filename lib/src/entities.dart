@@ -179,7 +179,7 @@ class LinkedEditSuggestion extends Entity {
 
   @override
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> result = {};
+    final result = <String, dynamic>{};
     result["value"] = value;
     result["kind"] = kind.toString();
     return result;
@@ -232,7 +232,7 @@ class Position extends Entity {
 
   @override
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> result = {};
+    final result = <String, dynamic>{};
     result["file"] = file;
     result["offset"] = offset;
     return result;

@@ -10,14 +10,14 @@ abstract class Logger {
   factory Logger.fromSinks({StringSink std, StringSink err}) =>
       new _SinkLogger(std, err);
 
+  /// Writes [message] to output as an error.
+  void error(String message);
+
   /// Writes [message] to output.
   void write(String message);
 
   /// Writes [message] followed by a newline to output.
   void writeln(String message);
-
-  /// Writes [message] to output as an error.
-  void error(String message);
 }
 
 /// A [Logger] implementation that writes to the specified [StringSink]s.
@@ -30,11 +30,11 @@ class _SinkLogger implements Logger {
   _SinkLogger(this._stdout, this._stderr);
 
   @override
+  void error(String message) => _stderr.writeln(message);
+
+  @override
   void write(String message) => _stdout.write(message);
 
   @override
   void writeln(String message) => _stdout.writeln(message);
-
-  @override
-  void error(String message) => _stderr.writeln(message);
 }

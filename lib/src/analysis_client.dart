@@ -6,6 +6,8 @@ import 'package:dart_delinter/src/entities.dart';
 
 JsonDecoder _decoder = const JsonDecoder();
 
+bool isLint(AnalysisError error) => error.hasFix && error.type == 'LINT';
+
 bool _isBalanced(String jsons) =>
     jsons.split('{').length == jsons.split('}').length;
 
@@ -124,5 +126,3 @@ class AnalysisClient {
         }
       };
 }
-
-bool isLint(AnalysisError error) => error.hasFix && error.type == 'LINT';

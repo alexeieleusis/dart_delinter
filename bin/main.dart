@@ -44,9 +44,7 @@ void _printUsage(ArgParser parser, Logger logger, [String error]) {
 Future _runDelinter(
     List<String> args, LinterOptions initialLintOptions, Logger logger) async {
   // Force the rule registry to be populated.
-  final parser = new ArgParser(allowTrailingOptions: true);
-
-  parser
+  final parser = new ArgParser(allowTrailingOptions: true)
     ..addFlag("help",
         abbr: "h", negatable: false, help: "Show usage information.")
     ..addFlag('quiet', abbr: 'q', help: "Don't show individual lint errors.")
@@ -134,7 +132,7 @@ Future _runDelinter(
 
   lintOptions.packageConfigPath = packageConfigFile;
 
-  final List<File> filesToLint = [];
+  final filesToLint = <File>[];
   for (final path in options.rest) {
     filesToLint.addAll(
         analyzer_io.collectFiles(path).where((f) => f.path.endsWith('.dart')));
